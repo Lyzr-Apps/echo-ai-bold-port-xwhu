@@ -1,0 +1,17 @@
+{
+  "agent_name": "Email Response Agent",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "schema": {
+    "detected_intent": "string",
+    "is_sensitive": "boolean",
+    "sensitivity_reason": "string",
+    "subject_line": "string",
+    "greeting": "string",
+    "body": "string",
+    "closing": "string",
+    "signature_placeholder": "string",
+    "confidence_score": "number"
+  }
+}

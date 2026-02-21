@@ -1,0 +1,32 @@
+{
+  "nodes": [
+    {
+      "id": "input_node",
+      "type": "Input",
+      "label": "User Email Input",
+      "nodeCategory": "input"
+    },
+    {
+      "id": "email_response_agent",
+      "type": "Agent",
+      "label": "Email Response Agent",
+      "nodeCategory": "agent"
+    },
+    {
+      "id": "output_node",
+      "type": "Output",
+      "label": "Generated Reply",
+      "nodeCategory": "end"
+    }
+  ],
+  "edges": [
+    {
+      "source": "input_node",
+      "target": "email_response_agent"
+    },
+    {
+      "source": "email_response_agent",
+      "target": "output_node"
+    }
+  ]
+}

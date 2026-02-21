@@ -1,0 +1,9 @@
+{
+  "agents": {
+    "email_response_agent": {
+      "agent_id": "69996a0682d9195c9e524bc5",
+      "name": "Email Response Agent",
+      "type": "single"
+    }
+  }
+}

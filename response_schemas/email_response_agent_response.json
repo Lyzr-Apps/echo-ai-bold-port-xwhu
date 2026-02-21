@@ -1,0 +1,30 @@
+{
+  "agent_name": "Email Response Agent",
+  "agent_id": "69996a0682d9195c9e524bc5",
+  "description": "Analyzes incoming email intent (request, complaint, follow-up, scheduling, negotiation, etc.), detects sensitive/legal content and flags it, then generates a structured professional reply matching the selected tone and length preference. Outputs email-ready formatted response with subject line, greeting, body, and signature block. Never fabricates commitments or alters original facts.",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "detected_intent": "string",
+    "is_sensitive": "boolean",
+    "sensitivity_reason": "string",
+    "subject_line": "string",
+    "greeting": "string",
+    "body": "string",
+    "closing": "string",
+    "signature_placeholder": "string",
+    "confidence_score": "number"
+  },
+  "example_response": {
+    "detected_intent": "The classified intent of the incoming email (request, complaint, follow-up, scheduling, negotiation, appreciation, inquiry, introduction, escalation, other)",
+    "is_sensitive": false,
+    "sensitivity_reason": "Explanation of why the email is flagged as sensitive, empty string if not sensitive",
+    "subject_line": "Suggested reply subject line",
+    "greeting": "Appropriate greeting for the reply",
+    "body": "Main reply body text",
+    "closing": "Appropriate closing line",
+    "signature_placeholder": "Signature block placeholder",
+    "confidence_score": 0
+  }
+}
