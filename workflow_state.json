@@ -4,6 +4,11 @@
       "agent_id": "69996a0682d9195c9e524bc5",
       "name": "Email Response Agent",
       "type": "single"
+    },
+    "gmail_sender_agent": {
+      "agent_id": "69996dd8e3502b03b1c6e14b",
+      "name": "Gmail Sender Agent",
+      "type": "single"
     }
   }
 }

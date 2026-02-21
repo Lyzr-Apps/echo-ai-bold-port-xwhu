@@ -1,0 +1,22 @@
+{
+  "agent_name": "Gmail Sender Agent",
+  "agent_id": "69996dd8e3502b03b1c6e14b",
+  "description": "Sends email replies via Gmail using the user's authenticated Gmail account. Takes recipient email, subject line, and email body as input and sends the email through Gmail API.",
+  "agent_type": "json",
+  "accessor": "result",
+  "auto_generated": true,
+  "response_schema": {
+    "email_sent": "boolean",
+    "recipient": "string",
+    "subject": "string",
+    "message_id": "string",
+    "error_message": "string"
+  },
+  "example_response": {
+    "email_sent": false,
+    "recipient": "The email address the email was sent to",
+    "subject": "The subject line used",
+    "message_id": "The Gmail message ID if available, empty string otherwise",
+    "error_message": "Error description if sending failed, empty string if successful"
+  }
+}

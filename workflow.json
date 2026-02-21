@@ -13,9 +13,15 @@
       "nodeCategory": "agent"
     },
     {
+      "id": "gmail_sender_agent",
+      "type": "Agent",
+      "label": "Gmail Sender Agent",
+      "nodeCategory": "agent"
+    },
+    {
       "id": "output_node",
       "type": "Output",
-      "label": "Generated Reply",
+      "label": "Email Sent Confirmation",
       "nodeCategory": "end"
     }
   ],
@@ -26,6 +32,10 @@
     },
     {
       "source": "email_response_agent",
+      "target": "gmail_sender_agent"
+    },
+    {
+      "source": "gmail_sender_agent",
       "target": "output_node"
     }
   ]

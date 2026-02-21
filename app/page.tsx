@@ -17,6 +17,7 @@ import { FiMail, FiCopy, FiTrash2, FiCheck, FiAlertTriangle, FiClock, FiChevronD
 
 // --- Constants ---
 const AGENT_ID = '69996a0682d9195c9e524bc5'
+const GMAIL_SENDER_AGENT_ID = '69996dd8e3502b03b1c6e14b'
 const HISTORY_KEY = 'echoai_reply_history'
 
 // --- Types ---
@@ -32,6 +33,14 @@ interface EmailResponse {
   confidence_score?: number
 }
 
+interface GmailSendResult {
+  email_sent?: boolean
+  recipient?: string
+  subject?: string
+  message_id?: string
+  error_message?: string
+}
+
 interface HistoryEntry {
   id: string
   timestamp: string
@@ -43,6 +52,8 @@ interface HistoryEntry {
   length: string
   contextNotes: string
   response: EmailResponse
+  sent_via_gmail?: boolean
+  recipient_email?: string
 }
 
 // --- Data Extraction ---
@@ -64,6 +75,26 @@ function extractAgentData(result: any): EmailResponse | null {
   }
   if (!data || typeof data !== 'object') return null
   return data as EmailResponse
+}
+
+function extractGmailData(result: any): GmailSendResult | null {
+  let data = result?.response?.result
+  if (typeof data === 'string') {
+    data = parseLLMJson(data)
+  }
+  if (data?.result && typeof data.result === 'object') {
+    data = data.result
+  }
+  if (typeof data?.text === 'string') {
+    try {
+      const parsed = parseLLMJson(data.text)
+      if (parsed && typeof parsed === 'object' && !parsed.error) {
+        data = parsed
+      }
+    } catch {}
+  }
+  if (!data || typeof data !== 'object') return null
+  return data as GmailSendResult
 }
 
 // --- Markdown Renderer ---
@@ -286,7 +317,7 @@ function HistoryCard({ entry, onCopy, onDelete, onExpand, isExpanded }: { entry:
       <CardContent className="p-5 space-y-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               {entry.response?.detected_intent && (
                 <Badge variant="secondary" className="text-xs uppercase tracking-wider font-medium">
                   {entry.response.detected_intent}
@@ -295,6 +326,12 @@ function HistoryCard({ entry, onCopy, onDelete, onExpand, isExpanded }: { entry:
               <Badge variant="outline" className="text-xs tracking-tight">
                 {entry.tone}
               </Badge>
+              {entry.sent_via_gmail && (
+                <Badge variant="default" className="text-xs tracking-tight bg-green-700 hover:bg-green-700">
+                  <FiCheck className="w-2.5 h-2.5 mr-1" />
+                  Sent
+                </Badge>
+              )}
             </div>
             <p className="text-sm font-medium tracking-tight truncate">{entry.response?.subject_line ?? 'No subject'}</p>
             <p className="text-xs text-muted-foreground tracking-tight mt-1 line-clamp-2">{entry.originalEmail?.slice(0, 150) ?? ''}...</p>
@@ -323,6 +360,12 @@ function HistoryCard({ entry, onCopy, onDelete, onExpand, isExpanded }: { entry:
                 <p className="mt-2 text-muted-foreground whitespace-pre-wrap">{entry.response?.signature_placeholder ?? ''}</p>
               </div>
             </div>
+            {entry.sent_via_gmail && entry.recipient_email && (
+              <div className="flex items-center gap-2 p-2 border border-green-300 bg-green-50 text-xs tracking-tight">
+                <FiCheck className="w-3 h-3 text-green-600 shrink-0" />
+                <span className="text-green-800">Sent via Gmail to {entry.recipient_email}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -376,6 +419,12 @@ export default function Page() {
 
   // Copy feedback
   const [copyFeedback, setCopyFeedback] = useState(false)
+
+  // Gmail send state
+  const [recipientEmail, setRecipientEmail] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sendStatus, setSendStatus] = useState<'idle' | 'success' | 'error'>('idle')
+  const [sendStatusMsg, setSendStatusMsg] = useState('')
 
   // History
   const [history, setHistory] = useState<HistoryEntry[]>([])
@@ -494,6 +543,79 @@ export default function Page() {
     }
   }, [agentResponse, isEditing, editableBody])
 
+  // Send via Gmail
+  const handleSendViaGmail = useCallback(async () => {
+    if (!agentResponse) return
+    if (!recipientEmail.trim()) {
+      setSendStatus('error')
+      setSendStatusMsg('Please enter a recipient email address.')
+      return
+    }
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(recipientEmail.trim())) {
+      setSendStatus('error')
+      setSendStatusMsg('Please enter a valid email address.')
+      return
+    }
+
+    setSending(true)
+    setSendStatus('idle')
+    setSendStatusMsg('')
+    setActiveAgentId(GMAIL_SENDER_AGENT_ID)
+
+    const emailBody = [
+      agentResponse.greeting ?? '',
+      '',
+      isEditing ? editableBody : (agentResponse.body ?? ''),
+      '',
+      agentResponse.closing ?? '',
+      '',
+      agentResponse.signature_placeholder ?? ''
+    ].join('\n').trim()
+
+    const message = `Send an email with the following details:
+
+Recipient Email: ${recipientEmail.trim()}
+Subject: ${agentResponse.subject_line ?? 'Re: Your Email'}
+Body:
+${emailBody}`
+
+    try {
+      const result = await callAIAgent(message, GMAIL_SENDER_AGENT_ID)
+      setActiveAgentId(null)
+
+      if (result.success) {
+        const data = extractGmailData(result)
+        if (data?.email_sent) {
+          setSendStatus('success')
+          setSendStatusMsg(`Email sent successfully to ${recipientEmail.trim()}`)
+          // Update history entry to mark as sent
+          const updatedHistory = history.map((entry) => {
+            if (entry.response?.subject_line === agentResponse.subject_line && !entry.sent_via_gmail) {
+              return { ...entry, sent_via_gmail: true, recipient_email: recipientEmail.trim() }
+            }
+            return entry
+          })
+          setHistory(updatedHistory)
+          saveHistory(updatedHistory)
+        } else {
+          setSendStatus('error')
+          setSendStatusMsg(data?.error_message || 'Failed to send email. Please try again.')
+        }
+      } else {
+        setSendStatus('error')
+        setSendStatusMsg(result.error ?? 'Failed to send email. Please try again.')
+      }
+    } catch (err) {
+      setSendStatus('error')
+      setSendStatusMsg('Network error. Please check your connection and try again.')
+    } finally {
+      setSending(false)
+      setActiveAgentId(null)
+    }
+  }, [agentResponse, recipientEmail, isEditing, editableBody, history])
+
   // Clear all
   const handleClearAll = useCallback(() => {
     setOriginalEmail('')
@@ -508,6 +630,10 @@ export default function Page() {
     setErrorMsg('')
     setIsEditing(false)
     setShowSample(false)
+    setRecipientEmail('')
+    setSending(false)
+    setSendStatus('idle')
+    setSendStatusMsg('')
   }, [])
 
   // Delete history entry
@@ -577,15 +703,24 @@ export default function Page() {
           </nav>
 
           {/* Agent Info */}
-          <div className="p-4 border-t border-border">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">Agent Status</p>
-            <div className="flex items-center gap-2">
-              <div className={`w-2 h-2 ${activeAgentId ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'}`} />
-              <span className="text-xs tracking-tight text-muted-foreground">
-                {activeAgentId ? 'Processing...' : 'Ready'}
-              </span>
+          <div className="p-4 border-t border-border space-y-3">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">Agents</p>
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 shrink-0 ${activeAgentId === AGENT_ID ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`} />
+                <span className="text-xs tracking-tight text-muted-foreground">
+                  Response Agent
+                </span>
+                {activeAgentId === AGENT_ID && <span className="text-[10px] text-green-600 tracking-tight ml-auto">Active</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`w-2 h-2 shrink-0 ${activeAgentId === GMAIL_SENDER_AGENT_ID ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground/40'}`} />
+                <span className="text-xs tracking-tight text-muted-foreground">
+                  Gmail Sender
+                </span>
+                {activeAgentId === GMAIL_SENDER_AGENT_ID && <span className="text-[10px] text-green-600 tracking-tight ml-auto">Active</span>}
+              </div>
             </div>
-            <p className="text-[10px] text-muted-foreground mt-1 tracking-tight">Email Response Agent</p>
           </div>
         </aside>
 
@@ -854,6 +989,81 @@ export default function Page() {
                             <FiX className="w-4 h-4 mr-2" />
                             Clear All
                           </Button>
+                        </div>
+
+                        <Separator />
+
+                        {/* Send via Gmail Section */}
+                        <div className="space-y-3">
+                          <label className="text-xs font-medium uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                            <FiMail className="w-3 h-3" />
+                            Send via Gmail
+                          </label>
+                          <div className="flex items-center gap-3">
+                            <Input
+                              type="email"
+                              placeholder="Recipient email address"
+                              value={recipientEmail}
+                              onChange={(e) => {
+                                setRecipientEmail(e.target.value)
+                                if (sendStatus !== 'idle') {
+                                  setSendStatus('idle')
+                                  setSendStatusMsg('')
+                                }
+                              }}
+                              className="flex-1 text-sm tracking-tight border-border bg-card"
+                              disabled={sending}
+                            />
+                            <Button
+                              onClick={handleSendViaGmail}
+                              disabled={sending || !recipientEmail.trim()}
+                              className="text-sm tracking-tight shrink-0"
+                              variant={sendStatus === 'success' ? 'outline' : 'default'}
+                            >
+                              {sending ? (
+                                <>
+                                  <FiLoader className="w-4 h-4 mr-2 animate-spin" />
+                                  Sending...
+                                </>
+                              ) : sendStatus === 'success' ? (
+                                <>
+                                  <FiCheck className="w-4 h-4 mr-2 text-green-600" />
+                                  Sent
+                                </>
+                              ) : (
+                                <>
+                                  <FiSend className="w-4 h-4 mr-2" />
+                                  Send via Gmail
+                                </>
+                              )}
+                            </Button>
+                          </div>
+
+                          {/* Send Status Feedback */}
+                          {sendStatus === 'success' && sendStatusMsg && (
+                            <div className="flex items-center gap-2 p-3 border border-green-300 bg-green-50 text-sm tracking-tight">
+                              <FiCheck className="w-4 h-4 text-green-600 shrink-0" />
+                              <p className="text-green-800">{sendStatusMsg}</p>
+                            </div>
+                          )}
+                          {sendStatus === 'error' && sendStatusMsg && (
+                            <div className="flex items-start gap-2 p-3 border border-destructive bg-destructive/5 text-sm tracking-tight">
+                              <FiAlertTriangle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                              <div className="flex-1">
+                                <p className="text-destructive">{sendStatusMsg}</p>
+                                <button onClick={handleSendViaGmail} className="text-xs underline text-destructive mt-1 hover:no-underline">
+                                  Retry
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {agentResponse.is_sensitive && sendStatus !== 'success' && (
+                            <p className="text-xs text-destructive tracking-tight flex items-center gap-1.5">
+                              <FiAlertTriangle className="w-3 h-3" />
+                              Sensitive content detected. Review thoroughly before sending.
+                            </p>
+                          )}
                         </div>
                       </div>
                     ) : (

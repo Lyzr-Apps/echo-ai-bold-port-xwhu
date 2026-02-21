@@ -1,0 +1,13 @@
+{
+  "agent_name": "Gmail Sender Agent",
+  "agent_type": "json",
+  "accessor": "json",
+  "has_module_outputs": false,
+  "schema": {
+    "email_sent": "boolean",
+    "recipient": "string",
+    "subject": "string",
+    "message_id": "string",
+    "error_message": "string"
+  }
+}
